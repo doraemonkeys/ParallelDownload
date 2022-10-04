@@ -1,4 +1,4 @@
-module github.com/Doraemonkeys/pd
+module github.com/Doraemonkeys/ParallelDownload
 
 go 1.19
 
