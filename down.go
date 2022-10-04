@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type Worker struct {
+type worker struct {
 	Url       string
 	File      *os.File
 	Count     int64
@@ -74,7 +74,7 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 	defer cancel()
 	errGroup := new(errgroup.Group)
 	// New worker struct to download file
-	var worker = Worker{
+	var worker = worker{
 		Url:       download_url,
 		File:      f,
 		Count:     worker_count,
@@ -103,7 +103,7 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 	return nil
 }
 
-func (w *Worker) writeRange(ctx context.Context, cancel context.CancelFunc, part_num int64, start int64, end int64) error {
+func (w *worker) writeRange(ctx context.Context, cancel context.CancelFunc, part_num int64, start int64, end int64) error {
 	var written int64
 	body, size, err := w.getRangeBody(start, end)
 	if err != nil {
@@ -151,7 +151,7 @@ func (w *Worker) writeRange(ctx context.Context, cancel context.CancelFunc, part
 	}
 }
 
-func (w *Worker) getRangeBody(start int64, end int64) (io.ReadCloser, int64, error) {
+func (w *worker) getRangeBody(start int64, end int64) (io.ReadCloser, int64, error) {
 	var client http.Client
 	req, err := http.NewRequest("GET", w.Url, nil)
 	// req.Header.Set("cookie", "")
