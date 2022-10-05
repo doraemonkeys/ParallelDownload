@@ -22,7 +22,7 @@ type worker struct {
 }
 
 // filename为文件存储的路径(可省略)+文件名
-func downloadFile(url string, filename string) error {
+func DownloadFile(url string, filename string) error {
 	request, err := http.NewRequest("GET", url, nil)
 	request.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36")
 	if err != nil {
@@ -60,7 +60,7 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 	file_size, err := getSizeAndCheckRangeSupport(download_url)
 	if err != nil {
 		//不支持多线程下载，尝试普通下载
-		return downloadFile(download_url, file_path)
+		return DownloadFile(download_url, file_path)
 	}
 	if file_size <= 0 {
 		return errors.New("get file size failed")
