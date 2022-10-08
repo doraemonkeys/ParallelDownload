@@ -70,9 +70,7 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 		return err
 	}
 	defer f.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	errGroup := new(errgroup.Group)
+	errGroup, ctx := errgroup.WithContext(context.Background())
 	// New worker struct to download file
 	var worker = worker{
 		Url:       download_url,
@@ -92,7 +90,7 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 		tempStart := start
 		tempEnd := end
 		errGroup.Go(func() error {
-			return worker.writeRange(ctx, cancel, tempNum, tempStart, tempEnd-1) // end-1
+			return worker.writeRange(ctx, tempNum, tempStart, tempEnd-1) // end-1
 		})
 		start = end
 	}
@@ -103,11 +101,10 @@ func ParallelDownload(download_url string, file_path string, worker_count int64)
 	return nil
 }
 
-func (w *worker) writeRange(ctx context.Context, cancel context.CancelFunc, part_num int64, start int64, end int64) error {
+func (w *worker) writeRange(ctx context.Context, part_num int64, start int64, end int64) error {
 	var written int64
 	body, size, err := w.getRangeBody(start, end)
 	if err != nil {
-		cancel()
 		return fmt.Errorf("part %d request error: %w", part_num, err)
 	}
 	defer body.Close()
@@ -123,11 +120,9 @@ func (w *worker) writeRange(ctx context.Context, cancel context.CancelFunc, part
 		if nr > 0 {
 			nw, err := w.File.WriteAt(buf[0:nr], start)
 			if err != nil {
-				cancel()
 				return fmt.Errorf("part %d write error: %w", part_num, err)
 			}
 			if nr != nw {
-				cancel()
 				return fmt.Errorf("part %d write error: %s", part_num, "short write")
 			}
 			start = int64(nw) + start
@@ -141,11 +136,9 @@ func (w *worker) writeRange(ctx context.Context, cancel context.CancelFunc, part
 					// Download successfully
 					return nil
 				} else {
-					cancel()
 					return fmt.Errorf("part %d download error: %s", part_num, "size not match")
 				}
 			}
-			cancel()
 			return fmt.Errorf("part %d download error: %w", part_num, err2)
 		}
 	}
