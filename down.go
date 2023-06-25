@@ -78,13 +78,10 @@ func ParallelDownload(download_url string, savePath string, filename string, wor
 	if filename == "" {
 		filename = name
 	}
-	fmt.Println("file name:", filename)
 	filePath := filepath.Join(savePath, filename)
 	if file_size <= 0 {
 		return errors.New("get file size failed")
 	}
-	fmt.Println("file size:", file_size)
-	fmt.Println("file path:", filePath)
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -195,9 +192,6 @@ func getInfoAndCheckRangeSupport(url string) (size int64, header http.Header, er
 		return
 	}
 	header = res.Header
-	for k, v := range header {
-		fmt.Println(k, v)
-	}
 	_, have := header["Content-Length"]
 	if !have {
 		err = errors.New("get file size failed")
