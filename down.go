@@ -231,17 +231,17 @@ func getFileNameByHeader(header http.Header) string {
 		}
 	}
 	for k, v := range header {
-		if strings.Contains(strings.ToLower(k), "name") {
-			return v[0]
-		}
-	}
-	for k, v := range header {
 		if strings.Contains(strings.ToLower(k), "content-disposition") {
 			if strings.Contains(v[0], "filename=") {
 				return v[0][strings.Index(v[0], "filename=")+9:]
 			} else {
 				return v[0]
 			}
+		}
+	}
+	for k, v := range header {
+		if strings.Contains(strings.ToLower(k), "name") {
+			return v[0]
 		}
 	}
 	return ""
