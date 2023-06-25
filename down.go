@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -21,8 +23,8 @@ type worker struct {
 	TotalSize int64
 }
 
-// filename为文件存储的路径(可省略)+文件名
-func DownloadFile(url string, filename string) error {
+// filename为文件名，savePath为文件存储的路径，两者都可省略。
+func Download(url string, savePath string, filename string) error {
 	request, err := http.NewRequest("GET", url, nil)
 	request.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36")
 	if err != nil {
@@ -33,15 +35,17 @@ func DownloadFile(url string, filename string) error {
 		return fmt.Errorf("访问url失败,err:%w", err)
 	}
 	defer resp.Body.Close()
+	name := generateDownloadFileName(url, resp.Header)
+	if filename == "" {
+		filename = name
+	}
+	filepath := filepath.Join(savePath, filename)
 	// 创建一个文件用于保存
-	out, err := os.Create(filename)
+	out, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	//io.Copy() 方法将副本从 src 复制到 dst ，直到 src 达到文件末尾 ( EOF ) 或发生错误，
-	//然后返回复制的字节数和复制时遇到的第一个错误(如果有)。
-	//将响应流和文件流对接起来
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		return err
@@ -49,23 +53,39 @@ func DownloadFile(url string, filename string) error {
 	return nil
 }
 
-// url为下载直链，若不支持多线程下载将尝试普通下载,file_path包含文件名
-func ParallelDownload(download_url string, file_path string, worker_count int64) (err error) {
-	if file_path == "" {
-		file_path, err = getFileName(download_url)
-		if err != nil {
-			return err
-		}
+func generateDownloadFileName(url string, header http.Header) string {
+	name := getFileNameByHeader(header)
+	if name != "" {
+		return name
 	}
-	file_size, err := getSizeAndCheckRangeSupport(download_url)
+	name, err := getFileNameFromUrl(url)
+	if err != nil || name == "" {
+		return time.Now().Format("20060102150405") + "_unknown"
+	}
+	return name
+}
+
+// url为下载直链，若不支持多线程下载将尝试普通下载。
+// filename为文件名，savePath为文件存储的路径，两者都可省略。
+func ParallelDownload(download_url string, savePath string, filename string, worker_count int64) (err error) {
+	file_size, header, err := getInfoAndCheckRangeSupport(download_url)
 	if err != nil {
+		fmt.Println("get file info failed:", err)
 		//不支持多线程下载，尝试普通下载
-		return DownloadFile(download_url, file_path)
+		return Download(download_url, savePath, filename)
 	}
+	name := generateDownloadFileName(download_url, header)
+	if filename == "" {
+		filename = name
+	}
+	fmt.Println("file name:", filename)
+	filePath := filepath.Join(savePath, filename)
 	if file_size <= 0 {
 		return errors.New("get file size failed")
 	}
-	f, err := os.OpenFile(file_path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	fmt.Println("file size:", file_size)
+	fmt.Println("file path:", filePath)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -162,7 +182,7 @@ func (w *worker) getRangeBody(start int64, end int64) (io.ReadCloser, int64, err
 	return resp.Body, size, err
 }
 
-func getSizeAndCheckRangeSupport(url string) (size int64, err error) {
+func getInfoAndCheckRangeSupport(url string) (size int64, header http.Header, err error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -174,7 +194,10 @@ func getSizeAndCheckRangeSupport(url string) (size int64, err error) {
 	if err != nil {
 		return
 	}
-	header := res.Header
+	header = res.Header
+	for k, v := range header {
+		fmt.Println(k, v)
+	}
 	_, have := header["Content-Length"]
 	if !have {
 		err = errors.New("get file size failed")
@@ -182,21 +205,44 @@ func getSizeAndCheckRangeSupport(url string) (size int64, err error) {
 	}
 	size, err = strconv.ParseInt(header["Content-Length"][0], 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("get file size error: %w", err)
+		return 0, header, fmt.Errorf("get file size error: %w", err)
 	}
 	accept_ranges, supported := header["Accept-Ranges"]
 	if !supported {
-		return size, errors.New("doesn't support header `Accept-Ranges`")
+		return size, header, errors.New("doesn't support header `Accept-Ranges`")
 	} else if supported && accept_ranges[0] != "bytes" {
-		return size, errors.New("support `Accept-Ranges`, but value is not `bytes`")
+		return size, header, errors.New("support `Accept-Ranges`, but value is not `bytes`")
 	}
 	return
 }
 
-func getFileName(download_url string) (string, error) {
+func getFileNameFromUrl(download_url string) (string, error) {
 	url_struct, err := url.Parse(download_url)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Base(url_struct.Path), nil
+}
+
+func getFileNameByHeader(header http.Header) string {
+	for k, v := range header {
+		if strings.Contains(strings.ToLower(k), "filename") {
+			return v[0]
+		}
+	}
+	for k, v := range header {
+		if strings.Contains(strings.ToLower(k), "name") {
+			return v[0]
+		}
+	}
+	for k, v := range header {
+		if strings.Contains(strings.ToLower(k), "content-disposition") {
+			if strings.Contains(v[0], "filename=") {
+				return v[0][strings.Index(v[0], "filename=")+9:]
+			} else {
+				return v[0]
+			}
+		}
+	}
+	return ""
 }

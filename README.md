@@ -5,16 +5,6 @@ Golang HTTP Downloader using Ranges for parallel downloads.
 
 
 
-## Overview
-
-
-
-```go
-func ParallelDownload(download_url string, file_path string, worker_count int64) (err error)
-```
-
-
-
 ## QuickStart
 
 ```go
@@ -32,7 +22,7 @@ import (
 
 func main() {
 	var worker int64 = 5
-	err := pd.ParallelDownload("https://XXX/XXX.XX", "path+name", worker)
+	err :=  pd.ParallelDownload("https://XXX/XXX.XX", "", "", worker)
 	if err != nil {
 		fmt.Println("download failed:", err)
 		return
